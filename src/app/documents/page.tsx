@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   FileText,
@@ -36,18 +36,25 @@ import {
   FileBarChart2,
   FileDiff,
   FileJson,
-  FileStack
+  FileStack,
+  Search,
+  Filter,
+  ChevronDown,
+  CalendarDays
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { UploadDocumentDialog, type DocumentUploadFormValues } from "@/components/documents/UploadDocumentDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 // Enhanced mock data with more document types and realistic data
 const initialVisitsDataRaw = [
@@ -56,6 +63,7 @@ const initialVisitsDataRaw = [
     date: "2024-05-15", 
     doctorName: "Dr. Priya Sharma", 
     specialty: "Cardiology",
+    doctorImage: "/doctors/dr-sharma.jpg",
     documents: [
       { 
         id: "doc1", 
@@ -66,7 +74,8 @@ const initialVisitsDataRaw = [
         documentDate: "2024-05-15",
         diagnosis: "Hyperlipidemia",
         visitReason: "Annual Checkup",
-        fileSize: "245 KB"
+        fileSize: "245 KB",
+        status: "verified"
       },
       { 
         id: "doc2", 
@@ -77,7 +86,8 @@ const initialVisitsDataRaw = [
         documentDate: "2024-05-15",
         diagnosis: "Hypertension",
         visitReason: "Medication Review",
-        fileSize: "128 KB"
+        fileSize: "128 KB",
+        status: "verified"
       },
       { 
         id: "doc3", 
@@ -88,7 +98,8 @@ const initialVisitsDataRaw = [
         documentDate: "2024-05-15",
         diagnosis: "Respiratory Symptoms",
         visitReason: "Follow-up",
-        fileSize: "1.2 MB"
+        fileSize: "1.2 MB",
+        status: "pending"
       },
     ], 
   },
@@ -97,6 +108,7 @@ const initialVisitsDataRaw = [
     date: "2024-04-20", 
     doctorName: "Dr. Rohan Mehra", 
     specialty: "Neurology",
+    doctorImage: "/doctors/dr-mehra.jpg",
     documents: [
       { 
         id: "doc4", 
@@ -107,7 +119,8 @@ const initialVisitsDataRaw = [
         documentDate: "2024-04-20",
         diagnosis: "Migraine Evaluation",
         visitReason: "Headache Assessment",
-        fileSize: "3.5 MB"
+        fileSize: "3.5 MB",
+        status: "verified"
       }
     ], 
   },
@@ -116,6 +129,7 @@ const initialVisitsDataRaw = [
     date: "2024-03-05", 
     doctorName: "Dr. Ananya Reddy", 
     specialty: "Endocrinology",
+    doctorImage: "/doctors/dr-reddy.jpg",
     documents: [
       {
         id: "doc5", 
@@ -126,7 +140,8 @@ const initialVisitsDataRaw = [
         documentDate: "2024-03-05",
         diagnosis: "Type 2 Diabetes",
         visitReason: "Quarterly Review",
-        fileSize: "320 KB"
+        fileSize: "320 KB",
+        status: "verified"
       },
       {
         id: "doc6", 
@@ -137,7 +152,8 @@ const initialVisitsDataRaw = [
         documentDate: "2024-03-05",
         diagnosis: "Type 2 Diabetes",
         visitReason: "Quarterly Review",
-        fileSize: "180 KB"
+        fileSize: "180 KB",
+        status: "pending"
       }
     ], 
   },
@@ -151,11 +167,13 @@ type DocumentItem = {
   originalFile: File | null;
   documentDate: string;
   doctorName?: string;
+  doctorImage?: string;
   specialty?: string;
   visitReason?: string;
   diagnosis?: string;
   fileSize?: string;
   originalVisitDate?: string;
+  status?: "verified" | "pending" | "expired";
 };
 
 const transformInitialData = (rawData: typeof initialVisitsDataRaw): DocumentItem[] => {
@@ -174,6 +192,7 @@ const transformInitialData = (rawData: typeof initialVisitsDataRaw): DocumentIte
         ...doc,
         documentDate: adjustedDocDate,
         doctorName: visit.doctorName,
+        doctorImage: visit.doctorImage,
         specialty: visit.specialty,
         originalVisitDate: adjustedVisitDate,
       });
@@ -215,6 +234,157 @@ const DocumentTypeIcon = ({ type }: { type: string }) => {
   return <IconComponent className="h-5 w-5" />;
 };
 
+const StatusBadge = ({ status }: { status?: string }) => {
+  if (!status) return null;
+
+  const statusConfig = {
+    verified: { label: "Verified", color: "bg-green-100 text-green-800" },
+    pending: { label: "Pending", color: "bg-yellow-100 text-yellow-800" },
+    expired: { label: "Expired", color: "bg-red-100 text-red-800" }
+  };
+
+  const config = statusConfig[status as keyof typeof statusConfig] || { label: status, color: "bg-gray-100 text-gray-800" };
+
+  return (
+    <span className={`text-xs px-2 py-1 rounded-full ${config.color}`}>
+      {config.label}
+    </span>
+  );
+};
+
+// DocumentCard component for displaying each document in a larger, less compact card
+const DocumentCard = ({ 
+  doc, 
+  onView, 
+  onDownload, 
+  onDelete 
+}: {
+  doc: DocumentItem;
+  onView: () => void;
+  onDownload: () => void;
+  onDelete: () => void;
+}) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  return (
+    <Card 
+      className="group relative overflow-hidden transition-all hover:shadow-md border-border/70 hover:border-primary/30 h-full flex flex-col"
+      onClick={onView}
+    >
+      <CardContent className="p-5 flex flex-col flex-1 gap-4">
+        {/* Header with icon and menu */}
+        <div className="flex justify-between items-start">
+          <div className="bg-primary/10 text-primary p-3 rounded-lg">
+            <DocumentTypeIcon type={doc.type} />
+          </div>
+          
+          <Popover open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMenuOpen(true);
+                }}
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-48 p-1" onClick={e => e.stopPropagation()}>
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start gap-2 px-2 py-2 text-sm hover:bg-muted/50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onView();
+                  setIsMenuOpen(false);
+                }}
+              >
+                <Eye className="h-4 w-4" /> View Details
+              </Button>
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start gap-2 px-2 py-2 text-sm hover:bg-muted/50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDownload();
+                  setIsMenuOpen(false);
+                }}
+              >
+                <Download className="h-4 w-4" /> Download
+              </Button>
+              <Separator className="my-1" />
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start gap-2 px-2 py-2 text-sm text-destructive hover:bg-destructive/10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                  setIsMenuOpen(false);
+                }}
+              >
+                <Trash2 className="h-4 w-4" /> Delete
+              </Button>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Document title and status */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-start gap-2">
+            <h3 className="text-lg font-semibold leading-snug line-clamp-2">
+              {doc.name}
+            </h3>
+            <StatusBadge status={doc.status} />
+          </div>
+          <Badge variant="outline" className="text-xs font-normal">
+            {doc.type}
+          </Badge>
+        </div>
+
+        {/* Doctor info */}
+        {doc.doctorName && (
+          <div className="flex items-center gap-3 mt-2">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={doc.doctorImage} />
+              <AvatarFallback className="text-xs">
+                {doc.doctorName.split(' ').map(n => n[0]).join('')}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{doc.doctorName}</p>
+              {doc.specialty && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {doc.specialty}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Metadata footer */}
+        <div className="mt-auto pt-4 border-t border-border/50">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
+                {format(parseISO(doc.documentDate), "MMM d, yyyy")}
+              </span>
+            </div>
+            {doc.fileSize && (
+              <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                {doc.fileSize}
+              </span>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 export default function DocumentsPage() {
   const [allDocuments, setAllDocuments] = useState<DocumentItem[]>(() => transformInitialData(initialVisitsDataRaw));
   const [showUploadDialog, setShowUploadDialog] = useState(false);
@@ -222,6 +392,7 @@ export default function DocumentsPage() {
   const [viewDoc, setViewDoc] = useState<DocumentItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const { toast } = useToast();
   const { t } = useLanguage();
 
@@ -232,7 +403,9 @@ export default function DocumentsPage() {
     
     const matchesType = filterType === "all" || doc.type.toLowerCase().includes(filterType.toLowerCase());
     
-    return matchesSearch && matchesType;
+    const matchesStatus = filterStatus === "all" || doc.status === filterStatus;
+    
+    return matchesSearch && matchesType && matchesStatus;
   });
 
   const documentTypes = Array.from(new Set(allDocuments.map(doc => doc.type)));
@@ -248,7 +421,8 @@ export default function DocumentsPage() {
       doctorName: data.doctorName,
       visitReason: data.visitReason,
       diagnosis: data.diagnosis,
-      fileSize: data.documentFile ? `${(data.documentFile.size / 1024).toFixed(1)} KB` : undefined
+      fileSize: data.documentFile ? `${(data.documentFile.size / 1024).toFixed(1)} KB` : undefined,
+      status: "pending"
     };
 
     setAllDocuments(prevDocs => 
@@ -306,29 +480,53 @@ export default function DocumentsPage() {
         </div>
         
         <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-          <div className="flex gap-2 w-full md:w-auto">
-            <Input
-              placeholder="Search documents..."
-              className="max-w-md"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              icon={FileSearch}
-            />
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="bg-background border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-            >
-              <option value="all">All Types</option>
-              {documentTypes.map(type => (
-                <option key={type} value={type.toLowerCase()}>{type}</option>
-              ))}
-            </select>
+          <div className="flex flex-col sm:flex-row gap-2 w-full">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search documents..."
+                className="pl-10 w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="w-[180px]">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-muted-foreground" />
+                    <span>{filterType === "all" ? "All Types" : filterType}</span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {documentTypes.map(type => (
+                    <SelectItem key={type} value={type.toLowerCase()}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-[140px]">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                    <span>{filterStatus === "all" ? "All Status" : filterStatus}</span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="verified">Verified</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           
           <Button
             onClick={() => setShowUploadDialog(true)}
-            className="gap-2 bg-primary hover:bg-primary/90"
+            className="gap-2 bg-primary hover:bg-primary/90 shadow-sm"
           >
             <FilePlus className="h-4 w-4" />
             Upload Document
@@ -339,76 +537,15 @@ export default function DocumentsPage() {
       <ScrollArea className="flex-1">
         <div className="p-6">
           {filteredDocuments.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredDocuments.map((doc) => (
-                <Card 
-                  key={doc.id} 
-                  className="group relative overflow-hidden transition-all hover:shadow-md hover:border-primary/20"
-                  onClick={() => setViewDoc(doc)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="bg-primary/10 text-primary flex items-center justify-center rounded-lg p-2.5 shrink-0">
-                        <DocumentTypeIcon type={doc.type} />
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-medium truncate">{doc.name}</h3>
-                        <div className="flex items-center gap-1 mt-1">
-                          <Badge variant="secondary" className="text-xs font-normal">
-                            {doc.type}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {format(parseISO(doc.documentDate), "MMM d, yyyy")}
-                          </span>
-                        </div>
-                        {doc.doctorName && (
-                          <p className="text-xs text-muted-foreground mt-1 truncate">
-                            {doc.doctorName}
-                            {doc.specialty && ` • ${doc.specialty}`}
-                          </p>
-                        )}
-                      </div>
-                      
-                      <Popover open={popoverOpenId === doc.id} onOpenChange={open => setPopoverOpenId(open ? doc.id : null)}>
-                        <PopoverTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 -mr-2 -mt-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => { e.stopPropagation(); setPopoverOpenId(doc.id); }}
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent align="end" className="w-48 p-1" onClick={e => e.stopPropagation()}>
-                          <Button 
-                            variant="ghost" 
-                            className="w-full justify-start gap-2 px-2 py-2 text-sm"
-                            onClick={() => { setViewDoc(doc); setPopoverOpenId(null); }}
-                          >
-                            <Eye className="h-4 w-4" /> View
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            className="w-full justify-start gap-2 px-2 py-2 text-sm"
-                            onClick={() => handleDownloadDocument(doc)}
-                          >
-                            <Download className="h-4 w-4" /> Download
-                          </Button>
-                          <Separator className="my-1" />
-                          <Button 
-                            variant="ghost" 
-                            className="w-full justify-start gap-2 px-2 py-2 text-sm text-destructive hover:bg-destructive/10"
-                            onClick={() => handleDeleteDocument(doc.id)}
-                          >
-                            <Trash2 className="h-4 w-4" /> Delete
-                          </Button>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </CardContent>
-                </Card>
+                <DocumentCard
+                  key={doc.id}
+                  doc={doc}
+                  onView={() => setViewDoc(doc)}
+                  onDownload={() => handleDownloadDocument(doc)}
+                  onDelete={() => handleDeleteDocument(doc.id)}
+                />
               ))}
             </div>
           ) : (
@@ -421,12 +558,12 @@ export default function DocumentsPage() {
               </div>
               <h3 className="text-lg font-medium text-foreground mb-1">No documents found</h3>
               <p className="text-sm text-muted-foreground max-w-md">
-                {searchQuery || filterType !== "all" 
+                {searchQuery || filterType !== "all" || filterStatus !== "all"
                   ? "Try adjusting your search or filter criteria"
                   : "Upload your first document to get started"}
               </p>
-              {!searchQuery && filterType === "all" && (
-                <Button className="mt-4 gap-2" onClick={() => setShowUploadDialog(true)}>
+              {!searchQuery && filterType === "all" && filterStatus === "all" && (
+                <Button className="mt-4 gap-2 shadow-sm" onClick={() => setShowUploadDialog(true)}>
                   <Upload className="h-4 w-4" />
                   Upload Document
                 </Button>
@@ -440,27 +577,29 @@ export default function DocumentsPage() {
       {viewDoc && (
         <Dialog open={!!viewDoc} onOpenChange={() => setViewDoc(null)}>
           <DialogContent className="max-w-4xl p-0 overflow-hidden rounded-lg">
-            <DialogHeader className="px-6 pt-6">
-              <DialogTitle className="flex items-center gap-3">
-                <div className="bg-primary/10 text-primary p-2 rounded-lg">
+            <DialogHeader className="px-6 pt-6 pb-4 border-b">
+              <div className="flex items-start gap-4">
+                <div className="bg-primary/10 text-primary p-3 rounded-lg">
                   <DocumentTypeIcon type={viewDoc.type} />
                 </div>
-                <div>
-                  <h2 className="text-xl font-semibold">{viewDoc.name}</h2>
-                  <div className="flex items-center gap-2 mt-1">
+                <div className="flex-1">
+                  <DialogTitle className="text-xl font-semibold">{viewDoc.name}</DialogTitle>
+                  {/* Replacing DialogDescription with div to avoid <div> inside <p> HTML error */}
+                  <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-2 mt-2">
                     <Badge variant="secondary">{viewDoc.type}</Badge>
                     <span className="text-sm text-muted-foreground">
                       {format(parseISO(viewDoc.documentDate), "MMMM d, yyyy")}
                     </span>
+                    <StatusBadge status={viewDoc.status} />
                   </div>
                 </div>
-              </DialogTitle>
+              </div>
             </DialogHeader>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
               {/* Document Preview */}
               <div className="space-y-4">
-                <h3 className="font-medium">Document Preview</h3>
+                <h3 className="font-medium text-sm">Document Preview</h3>
                 <div className="border rounded-lg bg-muted/50 aspect-video flex items-center justify-center">
                   {viewDoc.originalFile ? (
                     viewDoc.originalFile.type.startsWith('image/') ? (
@@ -504,11 +643,17 @@ export default function DocumentsPage() {
               {/* Document Details */}
               <div className="space-y-6">
                 <div>
-                  <h3 className="font-medium mb-3">Document Details</h3>
+                  <h3 className="font-medium text-sm mb-3">Document Details</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Doctor</p>
-                      <p className="text-sm font-medium">{viewDoc.doctorName || "—"}</p>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={viewDoc.doctorImage} />
+                          <AvatarFallback>{viewDoc.doctorName?.charAt(0) || "—"}</AvatarFallback>
+                        </Avatar>
+                        <p className="text-sm font-medium">{viewDoc.doctorName || "—"}</p>
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Specialty</p>
@@ -534,7 +679,7 @@ export default function DocumentsPage() {
                 <Separator />
                 
                 <div>
-                  <h3 className="font-medium mb-3">File Information</h3>
+                  <h3 className="font-medium text-sm mb-3">File Information</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">File Type</p>

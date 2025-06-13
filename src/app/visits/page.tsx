@@ -8,13 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Plus, Stethoscope, Loader2, Pencil, User, ClipboardList, Calendar, Clock, MapPin, Trash2 } from "lucide-react"; 
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 
-// Patch Visit type for UI: allow appointmentType, location, duration
-// @ts-ignore
 const initialVisits = [
   {
     id: "sample-1",
@@ -67,6 +68,22 @@ const initialVisits = [
     duration: "40 min"
   }
 ];
+
+const getDoctorInitials = (name: string) => {
+  if (!name) return "DR";
+  const parts = name.split(" ");
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+};
+
+const getSpecialtyColor = (specialty: string) => {
+  if (!specialty) return "bg-gray-100";
+  const spec = specialty.toLowerCase();
+  if (spec.includes("cardio")) return "bg-red-100 text-red-800";
+  if (spec.includes("psych")) return "bg-purple-100 text-purple-800";
+  if (spec.includes("general")) return "bg-blue-100 text-blue-800";
+  return "bg-gray-100 text-gray-800";
+};
 
 export default function VisitsPage() {
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -201,18 +218,18 @@ export default function VisitsPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Medical Appointments</h1>
           <p className="text-muted-foreground">
-            Track and manage your healthcare appointments in one place.
+            Track and manage your healthcare appointments in one place
           </p>
         </div>
         <Button 
           onClick={() => setShowAddForm(true)} 
-          disabled={isLoading}
-          className="gap-2"
+          className="gap-2 shadow-sm hover:shadow-md transition-shadow"
+          size="lg"
         >
           <Plus className="h-4 w-4" />
           Add Appointment
@@ -222,10 +239,10 @@ export default function VisitsPage() {
       {/* Add Appointment Dialog */}
       <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
         <DialogContent className="max-w-2xl">
-          <DialogTitle>Schedule New Appointment</DialogTitle>
+          <DialogHeader>
+            <DialogTitle className="text-xl">Schedule New Appointment</DialogTitle>
+          </DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-2">
-            {/* Patch for AddVisitForm props: allow initialValues and fields as any to suppress TS error
-            @ts-expect-error: UI prop compatibility */}
             <AddVisitForm 
               onAddVisit={handleAddVisit} 
               onCancel={() => {
@@ -256,42 +273,47 @@ export default function VisitsPage() {
       {showFollowUp && followUpData && (
         <Dialog open={showFollowUp} onOpenChange={setShowFollowUp}>
           <DialogContent className="max-w-md">
-            <DialogTitle>Appointment Follow-Up</DialogTitle>
-            <div className="mb-4 mt-2 text-left flex flex-col gap-1 items-center w-full">
-              <div className="font-semibold text-lg text-foreground flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
+            <DialogHeader>
+              <DialogTitle className="text-center">Appointment Follow-Up</DialogTitle>
+            </DialogHeader>
+            <div className="mb-6 mt-2 text-center flex flex-col gap-1 items-center w-full">
+              <Avatar className="h-16 w-16 mb-3">
+                <AvatarImage src="" />
+                <AvatarFallback className="bg-blue-100 text-blue-800 text-lg font-medium">
+                  {getDoctorInitials(followUpData.visit.doctorName)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="font-semibold text-lg text-foreground">
                 {followUpData.visit.doctorName?.trim() ? followUpData.visit.doctorName : "Doctor"}
               </div>
-              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                <Stethoscope className="h-4 w-4" />
+              <Badge variant="secondary" className="mt-1">
+                <Stethoscope className="h-3 w-3 mr-1.5" />
                 {followUpData.visit.specialization?.trim() ? followUpData.visit.specialization : "Specialty"}
-              </div>
-              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                <ClipboardList className="h-4 w-4" />
-                {followUpData.visit.appointmentType?.trim() ? followUpData.visit.appointmentType : "Appointment"}
-              </div>
-              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                <span className="font-medium">
-                  {followUpData.visit.appointmentDate ? format(parseISO(followUpData.visit.appointmentDate), "MMMM d, yyyy") : "Date"}
-                </span>
+              </Badge>
+              <div className="text-sm text-muted-foreground mt-2">
+                <Calendar className="h-4 w-4 inline mr-1.5" />
+                {followUpData.visit.appointmentDate ? format(parseISO(followUpData.visit.appointmentDate), "MMMM d, yyyy") : "Date"}
               </div>
             </div>
-            <div className="mt-2 mb-4 text-lg font-medium">
-              Did you visit the doctor for your appointment?
+            <div className="mt-4 mb-6 text-center">
+              <p className="text-lg font-medium mb-2">Did you attend your appointment?</p>
+              <p className="text-sm text-muted-foreground">We'd like to confirm your visit status</p>
             </div>
-            <div className="flex justify-center gap-3 mb-4">
+            <div className="flex justify-center gap-4">
               <Button
                 variant="default"
+                className="min-w-[120px]"
                 onClick={() => {
                   setShowFollowUp(false);
                   localStorage.removeItem("followUpVisit");
                   toast({ title: "Thank you!", description: "Glad you made it to your appointment." });
                 }}
               >
-                ✓ Yes, I did
+                ✓ Yes, I attended
               </Button>
               <Button
                 variant="outline"
+                className="min-w-[120px]"
                 onClick={() => {
                   setShowFollowUp(false);
                   setShowReschedule(true);
@@ -309,26 +331,31 @@ export default function VisitsPage() {
       {showReschedule && (
         <Dialog open={showReschedule} onOpenChange={setShowReschedule}>
           <DialogContent className="max-w-md">
-            <DialogTitle>Missed Appointment</DialogTitle>
-            <div className="mt-2 mb-4 text-lg font-medium">
-              Would you like to reschedule your appointment?
+            <DialogHeader>
+              <DialogTitle className="text-center">Missed Appointment</DialogTitle>
+            </DialogHeader>
+            <div className="mt-2 mb-6 text-center">
+              <p className="text-lg font-medium mb-2">Would you like to reschedule?</p>
+              <p className="text-sm text-muted-foreground">We can help you book a new appointment</p>
             </div>
-            <div className="flex justify-center gap-3 mb-2">
+            <div className="flex justify-center gap-4">
               <Button
                 variant="default"
+                className="min-w-[120px]"
                 onClick={() => {
                   setShowReschedule(false);
                   setRescheduleInitial(rescheduleData.current);
                   setShowAddForm(true);
                 }}
               >
-                Yes, Reschedule
+                Reschedule
               </Button>
               <Button
                 variant="outline"
+                className="min-w-[120px]"
                 onClick={() => setShowReschedule(false)}
               >
-                No, Dismiss
+                Dismiss
               </Button>
             </div>
           </DialogContent>
@@ -339,9 +366,10 @@ export default function VisitsPage() {
       {showEditModal && editAppointment && (
         <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
           <DialogContent className="max-w-2xl">
-            <DialogTitle>Edit Appointment</DialogTitle>
+            <DialogHeader>
+              <DialogTitle className="text-xl">Edit Appointment</DialogTitle>
+            </DialogHeader>
             <ScrollArea className="max-h-[70vh] pr-2">
-              {/* Patch for AddVisitForm edit: allow initialValues as any */}
               <AddVisitForm
                 onAddVisit={handleEditVisit}
                 onCancel={() => setShowEditModal(false)}
@@ -369,34 +397,62 @@ export default function VisitsPage() {
       {/* Delete Confirmation Dialog */}
       {deleteVisitId && (
         <Dialog open={!!deleteVisitId} onOpenChange={() => setDeleteVisitId(null)}>
-          <DialogContent>
-            <DialogTitle>Delete Appointment</DialogTitle>
-            <div className="mb-4">Are you sure you want to delete this appointment? This action cannot be undone.</div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDeleteVisitId(null)}>Cancel</Button>
-              <Button variant="destructive" onClick={() => handleDeleteVisit(deleteVisitId!)}>Delete</Button>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-center">Delete Appointment</DialogTitle>
+            </DialogHeader>
+            <div className="text-center mb-6">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 mb-4">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <p className="mb-2 font-medium">Are you sure you want to delete this appointment?</p>
+              <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+            </div>
+            <div className="flex justify-center gap-3">
+              <Button variant="outline" onClick={() => setDeleteVisitId(null)} className="min-w-[100px]">Cancel</Button>
+              <Button variant="destructive" onClick={() => handleDeleteVisit(deleteVisitId!)} className="min-w-[100px]">Delete</Button>
             </div>
           </DialogContent>
         </Dialog>
       )}
 
       {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-3/4 mb-2" />
+                <Skeleton className="h-4 w-1/2" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+              </CardContent>
+              <CardFooter className="flex justify-end gap-2">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-8 w-16" />
+              </CardFooter>
+            </Card>
+          ))}
         </div>
       ) : (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Recent Appointments</h2>
-            <p className="text-sm text-muted-foreground">{visits.length} total</p>
+            <h2 className="text-xl font-semibold">Your Appointments</h2>
+            <p className="text-sm text-muted-foreground">
+              {visits.length} {visits.length === 1 ? "appointment" : "appointments"} total
+            </p>
           </div>
 
           {visits.length === 0 ? (
-            <Card className="text-center py-12">
-              <Stethoscope className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <Card className="text-center py-12 border-dashed hover:border-solid transition-all">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 mb-4">
+                <Stethoscope className="h-6 w-6 text-gray-500" />
+              </div>
               <h3 className="text-lg font-medium mb-2">No appointments recorded</h3>
-              <p className="text-muted-foreground mb-4">Add your first appointment to get started</p>
-              <Button onClick={() => setShowAddForm(true)}>
+              <p className="text-muted-foreground mb-6">Add your first appointment to get started</p>
+              <Button onClick={() => setShowAddForm(true)} className="shadow-sm">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Appointment
               </Button>
@@ -405,39 +461,63 @@ export default function VisitsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {visits.map((visit) => {
                 const badge = getAppointmentTypeBadge((visit as any).appointmentType || '');
+                const isUpcoming = visit.date && new Date(visit.date) > new Date();
+                
                 return (
-                  <Card key={visit.id} className="hover:shadow-lg transition-shadow">
+                  <Card 
+                    key={visit.id} 
+                    className={cn(
+                      "hover:shadow-lg transition-shadow border",
+                      isUpcoming ? "border-blue-200" : "border-gray-200"
+                    )}
+                  >
                     <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">
-                            {visit.doctorName || "Unnamed Appointment"}
-                          </CardTitle>
-                          <p className="text-sm text-muted-foreground">
-                            {visit.specialization || "General Consultation"}
-                          </p>
+                      <div className="flex justify-between items-start gap-3">
+                        <div className="flex items-start gap-3">
+                          <Avatar className="h-10 w-10 mt-1">
+                            <AvatarImage src="" />
+                            <AvatarFallback className={cn(
+                              "text-sm font-medium",
+                              getSpecialtyColor(visit.specialization)
+                            )}>
+                              {getDoctorInitials(visit.doctorName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <CardTitle className="text-lg line-clamp-1">
+                              {visit.doctorName || "Unnamed Appointment"}
+                            </CardTitle>
+                            <p className="text-sm text-muted-foreground line-clamp-1">
+                              {visit.specialization || "General Consultation"}
+                            </p>
+                          </div>
                         </div>
-                        <Badge variant={badge.variant as any}>
+                        <Badge variant={badge.variant as any} className="shrink-0">
                           {badge.label}
                         </Badge>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="flex items-center gap-3">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
                         <span className="text-sm">
                           {visit.date ? format(parseISO(visit.date), "PPP") : "No date set"}
                         </span>
+                        {isUpcoming && (
+                          <Badge variant="outline" className="ml-auto text-xs py-0.5 px-2">
+                            Upcoming
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
                         <span className="text-sm">
                           {(visit as any).duration || "Duration not specified"}
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">
+                        <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm line-clamp-1">
                           {(visit as any).location || "Location not specified"}
                         </span>
                       </div>
@@ -451,12 +531,11 @@ export default function VisitsPage() {
                         </>
                       )}
                     </CardContent>
-                    <CardFooter className="flex justify-end gap-2">
+                    <CardFooter className="flex justify-end gap-2 pt-0">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-primary"
-                        disabled={isOlderThan3Months(visit.date)}
+                        className="text-primary hover:bg-blue-50"
                         onClick={() => {
                           setEditAppointment(visit as Visit);
                           setShowEditModal(true);
@@ -466,9 +545,9 @@ export default function VisitsPage() {
                         Edit
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        className="text-red-600 border border-red-200 hover:border-[3px] hover:border-transparent hover:bg-gradient-to-r hover:from-red-400/30 hover:to-red-600/20 transition-all duration-200"
+                        className="text-red-600 hover:bg-red-50"
                         onClick={() => setDeleteVisitId(visit.id)}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
